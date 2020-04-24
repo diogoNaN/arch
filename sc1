@@ -1,0 +1,267 @@
+#!bin/bash
+
+scr_name="Archiando | Parte 1 | Instalador personalizado do Archlinux | By Diogo Farkas"
+nexti="Teclado"
+
+packages=()
+packages+=("base")
+packages+=("base-devel")
+packages+=("linux")
+packages+=("linux-firmware")
+packages+=("efibootmgr")
+packages+=("grub-efi-x86_64")
+packages+=("networkmanager")
+packages+=("network-manager-applet")
+packages+=("deepin")
+packages+=("deepin-extra")
+packages+=("nvidia")
+packages+=("nvidia-settings")
+packages+=("nvidia-utils")
+packages+=("lib32-nvidia-utils")
+packages+=("sudo")
+packages+=("nano")
+packages+=("ttf-fira-code")
+packages+=("code")
+packages+=("yarn")
+packages+=("docker")
+packages+=("steam")
+packages+=("chromium")
+packages+=("dosfstools")
+packages+=("kshutdown")
+packages+=("hardinfo")
+packages+=("libnewt")
+packages+=("pavucontrol")
+packages+=("mtools")
+packages+=("zsh")
+packages+=("git")
+packages+=("go")
+
+pausa(){
+	read -n1 -p "Continuar [Enter]"
+}
+
+menu(){
+	options=()
+	options+=("Teclado" "Configurar Layout")
+	options+=("cfdisk" "Gerenciar PartiГ§Гµes")
+	options+=("fdisk" "Listar PartiГ§Гµes")
+	options+=("Formatar" "Formatar PartiГ§Гµes")
+	options+=("Montar" "Montar o Sistema")
+	options+=("Mirrors" "OrganizaГ§ГЈo AutomГЎtica")
+	options+=("Instalar" "Instalar os Pacotes")
+    options+=("FSTAB" "Gerar Tabela")
+    options+=("Mudar" "Arch-Chroot")
+    options+=("Desmontar" "")
+    options+=("Reiniciar" "")
+
+	sel=$(whiptail --backtitle "${scr_name}" --title "Menu" --menu "Utilize [в†ђ][в†‘][в†’][в†“] para selecionar e [Enter] para executar cada opГ§ГЈo" --cancel-button "Cancelar" --default-item "${nexti}" 0 56 0 \
+		"${options[@]}" \
+		3>&1 1>&2 2>&3)  
+	if [ "$?" = "0" ]; then
+		case ${sel} in
+			"Teclado")
+				loadkeys br-abnt2
+				nexti="cfdisk"
+                pausa
+			;;
+			"cfdisk")
+				cfdisk /dev/nvme0n1
+				nexti="fdisk"
+                pausa
+			;;
+			"fdisk")
+				fdisk -l /dev/nvme0n1
+				nexti="Formatar"
+                pausa
+			;;
+			"Formatar")
+				mkfs.fat -F32 /dev/nvme0n1p1
+                pausa
+                mkfs.ext4 /dev/nvme0n1p2
+                pausa
+                mkfs.ext4 /dev/nvme0n1p3
+				nexti="Montar"
+                pausa
+			;;
+			"Montar")
+				mount /dev/nvme0n1p2 /mnt
+                pausa
+                mkdir /mnt/boot
+                pausa
+                mkdir /mnt/boot/efi
+                pausa
+                mount /dev/nvme0n1p1 /mnt/boot/efi
+                pausa
+                mkdir /mnt/home
+                pausa
+                mount /dev/nvme0n1p3 /mnt/home
+				nexti="Mirrors"
+                pausa
+			;;
+			"Mirrors")
+				wget -O mirrors https://www.archlinux.org/mirrorlist/?country=BR&protocol=http&protocol=https&ip_version=4&use_mirror_status=on
+                pausa				
+                sed -i '/##/! s/^#//' mirrors
+                pausa
+                cat mirrors > /etc/pacman.d/mirrorlist
+                pausa
+                rm mirrors
+                echo -e "\n[multilib]" >> /etc/pacman.conf
+                echo -e "\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+                nexti="Instalar"
+                pausa
+			;;
+			"Instalar")
+				pacstrap /mnt ${packages[@]}
+				nexti="FSTAB"
+			;;
+			"FSTAB")
+				genfstab -U -p /mnt >> /mnt/etc/fstab
+                pausa
+                cat /mnt/etc/fstab
+				nexti="Mudar"
+                pausa
+			;;
+            "Mudar")
+                nexti="Desmontar"
+                sc2
+                arch-chroot /mnt
+                sh /mnt/sc2
+                echo "2?"
+            ;;
+            "Desmontar")
+                umount -R /mnt
+                nexti="Reiniciar"
+                pausa
+            ;;
+            "Reiniciar")
+                rm sc1
+                reboot
+            ;;
+        esac
+        menu "${nexti}"
+    else
+        clear
+    fi
+}
+
+sc2(){
+cat <<'EOF' > /mnt/sc2
+#!bin/bash
+
+scr_name="Archiando | Parte 2 | Instalador personalizado do Archlinux | By Diogo Farkas"
+new_user_name="devloper"
+nexti="Local"
+
+pausa(){
+	read -n1 -p "Continuar [Enter]"
+}
+
+menu(){
+	options=()
+    options+=("Local" "Definir Local")
+    options+=("Idioma" "Definir Idioma")
+    options+=("Salvar" "Idioma e Layout do Teclado")
+    options+=("Hosts" "Nome do PC")
+    options+=("Passwd" "Criar uma senha Root")
+    options+=("User" "Criar novo Usuário")
+    options+=("Grub" "Instalar o GRUB")
+    options+=("Deepin" "Instalar o Deepin")
+    options+=("Enable" "Ativar serviços")
+    options+=("<Voltar" "")
+
+	sel=$(TERM=ansi whiptail --backtitle "${scr_name}" --title "Menu Complementar" --menu "Utilize [в†ђ][в†‘][в†’][в†“] para selecionar e [Enter] para executar cada opГ§ГЈo" --cancel-button "Cancelar" --default-item "${nexti}" 0 56 0 \
+		"${options[@]}" \
+		3>&1 1>&2 2>&3)
+        
+	if [ "$?" = "0" ]; then
+        clear
+		case ${sel} in
+            "Local")
+                ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+                nexti="Idioma"
+                pausa
+            ;;
+            "Idioma")
+                sed -i '/pt_BR.UTF-8/ s/^#//' /etc/locale.gen
+                pausa
+                locale-gen
+                nexti="Salvar"
+                pausa
+            ;;
+            "Salvar")
+                echo "LANG=pt_BR.UTF-8" >> /etc/locale.conf
+                pausa
+                echo "KEYMAP=br-abnt2" >> /etc/vconsole.conf
+                nexti="Hosts"
+                pausa
+            ;;
+            "Hosts")
+                echo "dev-arch" >> /etc/hostname
+                pausa
+                echo "127.0.0.1 localhost.localdomain localhost" >> /etc/hosts
+                pausa
+                echo "::1 localhost.localdomain localhost" >> /etc/hosts
+                pausa
+                echo "127.0.1.1 dev-arch.localdomain dev-arch" >> /etc/hosts
+                nexti="Passwd"
+                pausa
+            ;;
+            "Passwd")
+                passwd
+                nexti="User"
+                pausa
+            ;;
+            "User")
+                useradd -m -g users $new_user_name
+                pausa
+                passwd $new_user_name
+                pausa
+                echo "$new_user_name ALL=(ALL) ALL" >> /etc/sudoers
+                nexti="Grub"
+                pausa
+            ;;
+            "Grub")
+                grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=arch-grub --recheck
+                pausa
+                mkdir /boot/grub/locale
+                pausa
+                cp /usr/share/locale/en@quot/LC_MESSAGES/grub.mo /boot/grub/locale/en.mo
+                pausa
+                grub-mkconfig -o /boot/grub/grub.cfg
+                nexti="Deepin"
+                pausa
+            ;;
+            "Deepin")
+                sed -i '/greeter-session=lightdm-deepin-greeter/ s/^#//' /etc/lightdm/lightdm.conf
+                nexti="Enable"
+                pausa
+            ;;
+            "Enable")
+                systemctl enable NetworkManager
+                systemctl enable lightdm
+		            echo -e "\n[multilib]" >> /etc/pacman.conf
+                echo -e "\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+                nexti="<Voltar"
+                pausa
+            ;;
+            "<Voltar")
+                rm sc2
+                exit
+            ;;
+        esac
+        menu "${nexti}"
+    else
+        clear
+    fi
+}
+
+menu
+
+exit
+EOF
+pausa
+chmod 755 /mnt/sc2
+}
+
+menu
