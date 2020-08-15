@@ -33,7 +33,7 @@ menu(){
 	options+=("fdisk" "Listar PartiГ§Гµes")
 	options+=("Formatar" "Formatar PartiГ§Гµes")
 	options+=("Montar" "Montar o Sistema")
-	options+=("Mirrors" "OrganizaГ§ГЈo AutomГЎtica")
+	options+=("Mirrors" "Organizar")
 	options+=("Instalar" "Instalar os Pacotes")
     options+=("FSTAB" "Gerar Tabela")
     options+=("Mudar" "Arch-Chroot")
