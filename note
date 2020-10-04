@@ -1,6 +1,7 @@
 scr_name="Archiando | Parte 1 | Instalador personalizado do Archlinux | By Diogo Farkas"
 nexti="Teclado"
 
+
 packages=()
 packages+=("base")
 packages+=("base-devel")
