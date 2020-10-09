@@ -1,5 +1,6 @@
 #!bin/bash
 
+
 scr_name="Archiando | Parte 1 | Instalador personalizado do Archlinux | By Diogo Farkas"
 nexti="Teclado"
 
