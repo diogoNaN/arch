@@ -8,7 +8,6 @@ sed -i '/ZSH_THEME=/ s/"robbyrussell"/"spaceship"/' ~/.zshrc
 ##3
 cat <<'EOF' >> ~/.zshrc
 
-
 ##4
 SPACESHIP_PROMPT_ORDER=(
   user          # Username section
