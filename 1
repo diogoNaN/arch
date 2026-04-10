@@ -31,6 +31,9 @@ do_prep_mirrors() {
     confirm "sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf"
     echo -e "\e[1;32m[REFRESHING BRAZILIAN MIRRORS]\e[0m"
     confirm "reflector --country Brazil --latest 10 --protocol https --sort age --save /etc/pacman.d/mirrorlist"
+    echo -e "\n\e[1;34m>> MIRRORLIST (BRAZIL):\e[0m"
+    cat /etc/pacman.d/mirrorlist
+    
     confirm "pacman -Sy"
     pause
 }
