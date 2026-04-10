@@ -64,7 +64,13 @@ do_disk_mount() {
 # --- STAGE 3: INSTALL ---
 do_pacstrap() {
     clear
-    local pkgs="base linux linux-firmware base-devel networkmanager nano git nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils gnome gdm xorg-xwayland steam"
+    local base_sys="base linux linux-firmware base-devel networkmanager nano git zsh zsh-completions"
+    local video="nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils"
+    local games="steam"
+    local desktop="gnome gdm xorg-xwayland"
+    local tools="gnome-tweaks file-roller gnome-disk-utility gnome-system-monitor bluez bluez-utils"
+    local pkgs="$base_sys $video $games $desktop $tools"
+    echo -e "\e[1;32m[INSTALANDO PACOTES: DEV & GAMER EDITION]\e[0m"
     confirm "pacstrap -K /mnt $pkgs"
     pause
 }
