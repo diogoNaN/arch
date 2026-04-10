@@ -4,7 +4,8 @@
 do_prep() {
     loadkeys br-abnt2 && timedatectl set-ntp true
     sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
-    reflector --latest 3 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+    echo "Buscando os melhores mirrors do Brasil..."
+    reflector --country Brazil --latest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
     pacman -Sy
 }
 
@@ -25,7 +26,6 @@ do_disk() {
     mount ${DISK}${PART_SUFFIX}2 /mnt
     mount --mkdir ${DISK}${PART_SUFFIX}1 /mnt/boot
     
-    # Salva variáveis para persistência entre as opções do menu
     echo "DISK=$DISK" > /tmp/inst_vars
     echo "PART_SUFFIX=$PART_SUFFIX" >> /tmp/inst_vars
 }
@@ -70,7 +70,7 @@ do_user() {
 # Loop Principal
 while true; do
     CHOICE=$(whiptail --title "Arch Linux Installer" --menu "Navegue com as setas e escolha a etapa:" 20 65 9 \
-        "1" "Preparar Mirrors e Teclado" \
+        "1" "Preparar Mirrors (BR) e Teclado" \
         "2" "Particionar e Montar Discos" \
         "3" "Pacstrap: Base (Sistema Essencial)" \
         "4" "Pacstrap: Drivers NVIDIA" \
@@ -102,5 +102,4 @@ while true; do
     esac
 done
 
-# Limpeza final caso o script saia inesperadamente
 rm -f /tmp/inst_vars
