@@ -1,112 +1,84 @@
 #!/bin/bash
 
-# Função de confirmação interativa
 confirm() {
-    echo -e "\n\e[1;33m[AWAITING CONFIRMATION]\e[0m"
-    echo -e "Action: \e[1;32m$1\e[0m"
-    echo "Press [ENTER] to execute or [CTRL+C] to cancel."
+    echo -e "\n\e[1;33m[Aguardando Confirmação]\e[0m"
+    echo -e "Ação: \e[1;32m$1\e[0m"
+    echo "Pressione [ENTER] para executar ou [CTRL+C] para cancelar."
     read -r < /dev/tty
     eval "$1"
 }
 
 clear
 echo "===================================================="
-echo "   ARCH INSTALL - GNOME FULL + NVIDIA + STEAM       "
+echo "   ARCH INSTALL - GNOME + NVIDIA + STEAM           "
 echo "===================================================="
 
 # 1. Preparação
 confirm "loadkeys br-abnt2"
 confirm "timedatectl set-ntp true"
 
-# Habilitar Multilib (Necessário para Steam/32-bits)
+# Multilib e Mirrors (Limitado a 3)
 confirm "sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf"
-confirm "reflector --latest 10 --protocol https --sort rate --save /etc/pacman.d/mirrorlist"
+confirm "reflector --latest 3 --protocol https --sort rate --save /etc/pacman.d/mirrorlist"
 confirm "pacman -Sy"
 
 # 2. Disco
-lsblk -d -o NAME,SIZE,MODEL,VENDOR,TRAN
-echo "Digite o nome do disco (ex: sda ou nvme0n1):"
-read -r DISK_NAME
+lsblk -d -o NAME,SIZE,MODEL,TRAN
+echo -n "Digite o nome do disco (ex: sda ou nvme0n1): "
+read -r DISK_NAME < /dev/tty
 DISK="/dev/$DISK_NAME"
 [[ $DISK == *"nvme"* ]] && PART_SUFFIX="p" || PART_SUFFIX=""
 
-# 3. Particionamento (EFI 512M + Root)
+# 3. Particionamento e Montagem
 confirm "echo 'label: gpt
 size=512M, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
 type=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709' | sfdisk $DISK"
 
-# 4. Formatação e Montagem
 confirm "mkfs.fat -F 32 ${DISK}${PART_SUFFIX}1"
 confirm "mkfs.ext4 ${DISK}${PART_SUFFIX}2"
 confirm "mount ${DISK}${PART_SUFFIX}2 /mnt"
 confirm "mount --mkdir ${DISK}${PART_SUFFIX}1 /mnt/boot"
 
-# 5. Instalação Base + NVIDIA + GNOME (Full) + Steam
+# 4. Instalação
 confirm "pacstrap -K /mnt base linux linux-firmware base-devel networkmanager nano git nvidia-open nvidia-utils nvidia-settings gnome gnome-extra gdm xorg-xwayland steam lib32-nvidia-utils"
 
-# 6. Fstab
-confirm "genfstab -U /mnt >> /mnt/etc/fstab"
-
-# 7. Configuração Interna
+# 5. Configuração
+genfstab -U /mnt >> /mnt/etc/fstab
 ROOT_UUID=$(blkid -s UUID -o value ${DISK}${PART_SUFFIX}2)
 
-arch-chroot /mnt /bin/bash -s <<EOF
-confirm() {
-    echo -e "\n\e[1;33m[INTERNAL CONFIRMATION]\e[0m"
-    echo -e "Command: \e[1;32m\$1\e[0m"
-    read -r < /dev/tty
-    eval "\$1"
-}
+# Chroot usando comando direto para evitar quebra de stdin
+arch-chroot /mnt /bin/bash <<EOF
+ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+hwclock --systohc
+sed -i 's/#pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen
+locale-gen
+echo 'LANG=pt_BR.UTF-8' > /etc/locale.conf
+echo 'KEYMAP=br-abnt2' > /etc/vconsole.conf
+echo 'arch-pc' > /etc/hostname
 
-# Localidade e Identidade
-confirm "ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime && hwclock --systohc"
-confirm "sed -i 's/#pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen && locale-gen"
-confirm "echo 'LANG=pt_BR.UTF-8' > /etc/locale.conf && echo 'KEYMAP=br-abnt2' > /etc/vconsole.conf"
-confirm "echo 'arch-pc' > /etc/hostname"
+# Early KMS NVIDIA
+sed -i 's/MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
+mkinitcpio -P
 
-# Early KMS para NVIDIA
-confirm "sed -i 's/MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf"
-confirm "mkinitcpio -P"
+# Bootloader
+bootctl install
+echo -e "title Arch Linux\nlinux /vmlinuz-linux\ninitrd /initramfs-linux.img\noptions root=UUID=$ROOT_UUID rw nvidia-drm.modeset=1" > /boot/loader/entries/arch.conf
+echo -e "default arch.conf\ntimeout 1\nconsole-mode max" > /boot/loader/loader.conf
 
-# Bootloader (systemd-boot)
-confirm "bootctl install"
-
-cat <<EOT > /boot/loader/entries/arch.conf
-title   Arch Linux
-linux   /vmlinuz-linux
-initrd  /initramfs-linux.img
-options root=UUID=$ROOT_UUID rw nvidia-drm.modeset=1
-EOT
-
-cat <<EOT > /boot/loader/loader.conf
-default arch.conf
-timeout 1
-console-mode max
-EOT
-
-# Senha Root
-echo "--- Defina a senha do ROOT ---"
-confirm "passwd"
-
-# Criação de Usuário
-echo "--- Configuração de Usuário ---"
-echo "Digite o nome do usuário:"
-read -r USER_NAME < /dev/tty
-confirm "useradd -m -G wheel -s /bin/bash \$USER_NAME"
-echo "Defina a senha para \$USER_NAME:"
-confirm "passwd \$USER_NAME"
-
-# Permitir SUDO para o grupo wheel
-confirm "sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers"
-
-# Habilitar Serviços
-confirm "systemctl enable NetworkManager"
-confirm "systemctl enable gdm"
-
+sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
+systemctl enable NetworkManager
+systemctl enable gdm
 EOF
 
-# 8. Finalização
-echo -e "\n===================================================="
-echo "   INSTALAÇÃO CONCLUÍDA! REMOVA O PENDRIVE.         "
-echo "===================================================="
+# Interações fora do heredoc para não bugar o terminal
+echo "--- Defina a senha do ROOT ---"
+arch-chroot /mnt passwd
+
+echo -n "Digite o nome do novo usuário: "
+read -r USER_NAME < /dev/tty
+arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$USER_NAME"
+
+echo "--- Defina a senha para $USER_NAME ---"
+arch-chroot /mnt passwd "$USER_NAME"
+
 confirm "umount -R /mnt && reboot"
