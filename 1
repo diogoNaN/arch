@@ -125,7 +125,7 @@ do_root_pass() {
     clear
     echo -e "\n\e[1;31m[ ROOT PASSWORD CONFIGURATION ]\e[0m"
     echo "Set password for the ROOT user:"
-    arch-chroot /mnt passwd
+    arch-chroot /mnt passwd < /dev/tty
     pause
 }
 
