@@ -98,6 +98,7 @@ do_config_system() {
     confirm "arch-chroot /mnt locale-gen"
     confirm "arch-chroot /mnt bash -c \"echo 'LANG=pt_BR.UTF-8' > /etc/locale.conf\""
     confirm "arch-chroot /mnt bash -c \"echo 'KEYMAP=br-abnt2' > /etc/vconsole.conf\""
+    confirm "arch-chroot /mnt localectl set-x11-keymap br"
     confirm "arch-chroot /mnt bash -c \"echo 'arch-pc' > /etc/hostname\""
     pause
 }
@@ -136,6 +137,7 @@ do_create_user() {
     echo -n "Enter new username: "
     read -r USER_NAME < /dev/tty
     confirm "arch-chroot /mnt useradd -m -G wheel -s /bin/zsh $USER_NAME"
+    confirm "arch-chroot /mnt sudo -u $USER_NAME dbus-run-session gsettings set org.gnome.desktop.input-sources sources \"[('xkb', 'br')]\""
     confirm "arch-chroot /mnt bash -c \"[ -f /etc/zsh/zshrc ] && cp /etc/zsh/zshrc /home/$USER_NAME/.zshrc || touch /home/$USER_NAME/.zshrc\""
     confirm "arch-chroot /mnt bash -c \"echo 'source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh' >> /home/$USER_NAME/.zshrc\""
     confirm "arch-chroot /mnt chown -R $USER_NAME:$USER_NAME /home/$USER_NAME"
