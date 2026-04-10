@@ -1,42 +1,69 @@
 #!/bin/bash
 
+# Função para pausar e aguardar o usuário
+pause() {
+    echo -e "\n\e[1;33mPressione [ENTER] para voltar ao menu...\e[0m"
+    read -r
+}
+
 # Funções de Instalação
 do_prep() {
+    clear
     loadkeys br-abnt2 && timedatectl set-ntp true
     sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
     
-    echo "Buscando os mirrors mais atualizados do Brasil..."
-    # Aumentado para 15 mirrors e ordenado por 'age' para evitar erros de timeout no teste de velocidade
+    echo -e "\n\e[1;32m[BUSCANDO OS MELHORES MIRRORS DO BRASIL...]\e[0m"
     reflector --country Brazil --latest 15 --protocol https --sort age --save /etc/pacman.d/mirrorlist
     
+    echo -e "\n\e[1;34m--- Lista de Mirrors Gerada ---\e[0m"
+    grep "^Server" /etc/pacman.d/mirrorlist
+    echo -e "\e[1;34m-------------------------------\e[0m"
+    
+    echo -e "\nSincronizando base de dados..."
     pacman -Sy
+    pause
 }
 
 do_disk() {
+    clear
     lsblk -d -o NAME,SIZE,MODEL
+    echo ""
     read -p "Digite o nome do disco (ex: sda ou nvme0n1): " DISK_NAME
     DISK="/dev/$DISK_NAME"
     [[ $DISK == *"nvme"* ]] && PART_SUFFIX="p" || PART_SUFFIX=""
     
-    echo "Limpando e particionando $DISK..."
+    echo "Limpando assinaturas antigas e particionando $DISK..."
     wipefs -a $DISK
     echo 'label: gpt
     size=512M, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
     type=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709' | sfdisk $DISK
     
+    echo "Formatando e montando partições..."
     mkfs.fat -F 32 ${DISK}${PART_SUFFIX}1
     mkfs.ext4 ${DISK}${PART_SUFFIX}2
     mount ${DISK}${PART_SUFFIX}2 /mnt
     mount --mkdir ${DISK}${PART_SUFFIX}1 /mnt/boot
     
-    # Persistência de variáveis para as próximas etapas
     echo "DISK=$DISK" > /tmp/inst_vars
     echo "PART_SUFFIX=$PART_SUFFIX" >> /tmp/inst_vars
+    pause
+}
+
+do_pacstrap() {
+    clear
+    case $1 in
+        base) pacstrap -K /mnt base linux linux-firmware base-devel networkmanager nano git ;;
+        nvidia) pacstrap -K /mnt nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils ;;
+        gnome) pacstrap -K /mnt gnome gnome-extra gdm xorg-xwayland steam ;;
+    esac
+    pause
 }
 
 do_config() {
+    clear
     if [ ! -f /tmp/inst_vars ]; then
-        whiptail --msgbox "Erro: Execute a etapa de disco (2) primeiro!" 8 45
+        echo "Erro: Você precisa configurar o disco (opção 2) primeiro!"
+        pause
         return
     fi
     source /tmp/inst_vars
@@ -59,22 +86,24 @@ do_config() {
     sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
     systemctl enable NetworkManager gdm
 EOF
-    echo -e "\n--- Defina a senha do ROOT ---"
+    echo -e "\n\e[1;33m--- DEFINA A SENHA DO USUÁRIO ROOT ---\e[0m"
     arch-chroot /mnt passwd
+    pause
 }
 
 do_user() {
-    echo "Nome do usuário:"
-    read -r USER_NAME
+    clear
+    read -p "Digite o nome do novo usuário: " USER_NAME
     arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$USER_NAME"
-    echo "Defina a senha para $USER_NAME:"
+    echo -e "\n\e[1;33m--- DEFINA A SENHA PARA $USER_NAME ---\e[0m"
     arch-chroot /mnt passwd "$USER_NAME"
+    pause
 }
 
-# Loop Principal com Whiptail
+# Loop Principal
 while true; do
-    CHOICE=$(whiptail --title "Arch Linux Installer (Mirrors BR)" --menu "Escolha uma etapa:" 20 65 9 \
-        "1" "Preparar Mirrors (Brasil) e Teclado" \
+    CHOICE=$(whiptail --title "Arch Linux Installer" --menu "Selecione a tarefa:" 20 65 9 \
+        "1" "Preparar Mirrors (BR) e Teclado" \
         "2" "Particionar e Montar Discos" \
         "3" "Pacstrap: Base (Kernel + Redes)" \
         "4" "Pacstrap: Drivers NVIDIA" \
@@ -86,17 +115,17 @@ while true; do
     case $CHOICE in
         1) do_prep ;;
         2) do_disk ;;
-        3) pacstrap -K /mnt base linux linux-firmware base-devel networkmanager nano git ;;
-        4) pacstrap -K /mnt nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils ;;
-        5) pacstrap -K /mnt gnome gnome-extra gdm xorg-xwayland steam ;;
+        3) do_pacstrap base ;;
+        4) do_pacstrap nvidia ;;
+        5) do_pacstrap gnome ;;
         6) do_config ;;
         7) do_user ;;
         8) 
-            if whiptail --yesno "Desmontar /mnt e reiniciar agora?" 8 45; then
+            if whiptail --yesno "Deseja desmontar /mnt e reiniciar agora?" 8 45; then
                 rm -f /tmp/inst_vars
                 umount -R /mnt && reboot
             else
-                break
+                continue
             fi
             ;;
         *) 
@@ -105,6 +134,3 @@ while true; do
             ;;
     esac
 done
-
-# Limpeza caso o script seja fechado com CTRL+C
-rm -f /tmp/inst_vars
