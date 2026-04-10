@@ -136,12 +136,12 @@ do_create_user() {
     echo -n "Enter new username: "
     read -r USER_NAME < /dev/tty
     confirm "arch-chroot /mnt useradd -m -G wheel -s /bin/zsh $USER_NAME"
-    confirm "arch-chroot /mnt cp /etc/zsh/zshrc /home/$USER_NAME/.zshrc"
+    confirm "arch-chroot /mnt bash -c \"[ -f /etc/zsh/zshrc ] && cp /etc/zsh/zshrc /home/$USER_NAME/.zshrc || touch /home/$USER_NAME/.zshrc\""
     confirm "arch-chroot /mnt bash -c \"echo 'source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh' >> /home/$USER_NAME/.zshrc\""
     confirm "arch-chroot /mnt chown -R $USER_NAME:$USER_NAME /home/$USER_NAME"
     
     echo -e "\nSet password for $USER_NAME:"
-    arch-chroot /mnt passwd "$USER_NAME"
+    arch-chroot /mnt passwd "$USER_NAME" < /dev/tty
     pause
 }
 
