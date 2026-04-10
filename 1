@@ -1,141 +1,156 @@
 #!/bin/bash
 
-# Função para pausar e garantir que o terminal responda
+# --- MODERN WHIPTAIL THEME ---
+export NEWT_COLORS='root=,black; window=,black; border=white,black; title=cyan,black; button=black,cyan; actbutton=black,brightcyan; listbox=white,black; actlistbox=black,cyan'
+
 pause() {
-    # Reseta as configurações do terminal para garantir que o input funcione
     stty sane
-    echo -e "\n\e[1;33m[CONCLUÍDO] Pressione [ENTER] para voltar ao menu...\e[0m"
-    # Lê do terminal ignorando qualquer lixo no buffer
+    echo -e "\n\e[1;33mPress [ENTER] to continue...\e[0m"
     read -r _ < /dev/tty
 }
 
-# Funções de Instalação
-do_prep() {
+confirm() {
+    local cmd="$1"
+    local yellow="\e[1;33m"; local green="\e[1;32m"; local white="\e[1;37m"; local blue="\e[1;34m"; local reset="\e[0m"
+    echo -e "${blue}>>${reset} ${yellow}NEXT COMMAND:${reset} ${white}$cmd${reset}"
+    echo -ne "${green}[ENTER]${reset} Run | ${yellow}[N]${reset} Skip: "
+    read -r user_input < /dev/tty
+    [[ "$user_input" =~ ^[Nn]$ ]] && echo -e "\e[1;31m[SKIPPED]\e[0m" || eval "$cmd"
+}
+
+# --- STAGE 1: PREP ---
+do_prep_net() {
     clear
-    loadkeys br-abnt2 && timedatectl set-ntp true
-    sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
-    
-    echo -e "\n\e[1;32m[BUSCANDO OS MELHORES MIRRORS DO BRASIL...]\e[0m"
-    reflector --country Brazil --latest 15 --protocol https --sort age --save /etc/pacman.d/mirrorlist
-    
-    echo -e "\n\e[1;34m--- Lista de Mirrors Gerada ---\e[0m"
-    grep "^Server" /etc/pacman.d/mirrorlist
-    echo -e "\e[1;34m-------------------------------\e[0m"
-    
-    echo -e "\nSincronizando base de dados..."
-    pacman -Sy
+    confirm "loadkeys br-abnt2"
+    confirm "timedatectl set-ntp true"
     pause
 }
 
-do_disk() {
+do_prep_mirrors() {
+    clear
+    confirm "sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf"
+    echo -e "\e[1;32m[REFRESHING BRAZILIAN MIRRORS]\e[0m"
+    confirm "reflector --country Brazil --latest 10 --protocol https --sort age --save /etc/pacman.d/mirrorlist"
+    confirm "pacman -Sy"
+    pause
+}
+
+# --- STAGE 2: DISK ---
+do_disk_setup() {
     clear
     lsblk -d -o NAME,SIZE,MODEL
-    echo ""
-    echo -n "Digite o nome do disco (ex: sda ou nvme0n1): "
+    echo -n "Disk name (e.g. sda or nvme0n1): "
     read -r DISK_NAME < /dev/tty
     DISK="/dev/$DISK_NAME"
     [[ $DISK == *"nvme"* ]] && PART_SUFFIX="p" || PART_SUFFIX=""
     
-    echo "Limpando assinaturas antigas e particionando $DISK..."
-    wipefs -a $DISK
-    echo 'label: gpt
-    size=512M, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
-    type=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709' | sfdisk $DISK
-    
-    echo "Formatando e montando partições..."
-    mkfs.fat -F 32 ${DISK}${PART_SUFFIX}1
-    mkfs.ext4 ${DISK}${PART_SUFFIX}2
-    mount ${DISK}${PART_SUFFIX}2 /mnt
-    mount --mkdir ${DISK}${PART_SUFFIX}1 /mnt/boot
-    
+    confirm "wipefs -a $DISK"
+    confirm "echo -e 'label: gpt\nsize=512M, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\ntype=4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709' | sfdisk $DISK"
     echo "DISK=$DISK" > /tmp/inst_vars
     echo "PART_SUFFIX=$PART_SUFFIX" >> /tmp/inst_vars
     pause
 }
 
-do_pacstrap() {
+do_disk_mount() {
     clear
-    case $1 in
-        base)   pacstrap -K /mnt base linux linux-firmware base-devel networkmanager nano git ;;
-        nvidia) pacstrap -K /mnt nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils ;;
-        gnome)  pacstrap -K /mnt gnome gnome-extra gdm xorg-xwayland steam ;;
-    esac
+    source /tmp/inst_vars
+    confirm "mkfs.fat -F 32 ${DISK}${PART_SUFFIX}1"
+    confirm "mkfs.ext4 ${DISK}${PART_SUFFIX}2"
+    confirm "mount ${DISK}${PART_SUFFIX}2 /mnt"
+    confirm "mount --mkdir ${DISK}${PART_SUFFIX}1 /mnt/boot"
     pause
 }
 
-do_config() {
+# --- STAGE 3: INSTALL ---
+do_pacstrap() {
     clear
-    if [ ! -f /tmp/inst_vars ]; then
-        echo "Erro: Você precisa configurar o disco (opção 2) primeiro!"
-        pause
-        return
-    fi
+    local pkgs="base linux linux-firmware base-devel networkmanager nano git nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils gnome gdm xorg-xwayland steam"
+    confirm "pacstrap -K /mnt $pkgs"
+    pause
+}
+
+# --- STAGE 4: CONFIG ---
+do_config_system() {
+    clear
     source /tmp/inst_vars
-    genfstab -U /mnt >> /mnt/etc/fstab
+    confirm "genfstab -U /mnt >> /mnt/etc/fstab"
+    confirm "arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime"
+    confirm "arch-chroot /mnt hwclock --systohc"
+    confirm "arch-chroot /mnt sed -i 's/#pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen"
+    confirm "arch-chroot /mnt locale-gen"
+    confirm "arch-chroot /mnt bash -c \"echo 'LANG=pt_BR.UTF-8' > /etc/locale.conf\""
+    confirm "arch-chroot /mnt bash -c \"echo 'KEYMAP=br-abnt2' > /etc/vconsole.conf\""
+    confirm "arch-chroot /mnt bash -c \"echo 'arch-pc' > /etc/hostname\""
+    pause
+}
+
+do_hardware() {
+    clear
+    confirm "arch-chroot /mnt sed -i 's/MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf"
+    confirm "arch-chroot /mnt mkinitcpio -P"
+    confirm "arch-chroot /mnt systemctl enable NetworkManager gdm"
+    pause
+}
+
+do_bootloader() {
+    clear
+    source /tmp/inst_vars
     ROOT_UUID=$(blkid -s UUID -o value ${DISK}${PART_SUFFIX}2)
-    
-    arch-chroot /mnt /bin/bash <<EOF
-    ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
-    hwclock --systohc
-    sed -i 's/#pt_BR.UTF-8 UTF-8/pt_BR.UTF-8 UTF-8/' /etc/locale.gen
-    locale-gen
-    echo 'LANG=pt_BR.UTF-8' > /etc/locale.conf
-    echo 'KEYMAP=br-abnt2' > /etc/vconsole.conf
-    echo 'arch-pc' > /etc/hostname
-    sed -i 's/MODULES=(/MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm /' /etc/mkinitcpio.conf
-    mkinitcpio -P
-    bootctl install
-    echo -e "title Arch Linux\nlinux /vmlinuz-linux\ninitrd /initramfs-linux.img\noptions root=UUID=$ROOT_UUID rw nvidia-drm.modeset=1" > /boot/loader/entries/arch.conf
-    echo -e "default arch.conf\ntimeout 1\nconsole-mode max" > /boot/loader/loader.conf
-    sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
-    systemctl enable NetworkManager gdm
-EOF
-    echo -e "\n\e[1;33m--- DEFINA A SENHA DO USUÁRIO ROOT ---\e[0m"
+    confirm "arch-chroot /mnt bootctl install"
+    confirm "arch-chroot /mnt bash -c \"echo -e 'title Arch Linux\nlinux /vmlinuz-linux\ninitrd /initramfs-linux.img\noptions root=UUID=$ROOT_UUID rw nvidia-drm.modeset=1' > /boot/loader/entries/arch.conf\""
+    confirm "arch-chroot /mnt bash -c \"echo -e 'default arch.conf\ntimeout 1\nconsole-mode max' > /boot/loader/loader.conf\""
+    pause
+}
+
+# --- STAGE 5: SECURITY & USERS ---
+do_root_pass() {
+    clear
+    echo -e "\n\e[1;31m[ ROOT PASSWORD CONFIGURATION ]\e[0m"
+    echo "Set password for the ROOT user:"
     arch-chroot /mnt passwd
     pause
 }
 
-do_user() {
+do_create_user() {
     clear
-    echo -n "Digite o nome do novo usuário: "
+    confirm "arch-chroot /mnt sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers"
+    
+    echo -n "Enter new username: "
     read -r USER_NAME < /dev/tty
-    arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$USER_NAME"
-    echo -e "\n\e[1;33m--- DEFINA A SENHA PARA $USER_NAME ---\e[0m"
+    confirm "arch-chroot /mnt useradd -m -G wheel -s /bin/bash $USER_NAME"
+    
+    echo -e "\nSet password for $USER_NAME:"
     arch-chroot /mnt passwd "$USER_NAME"
     pause
 }
 
-# Loop Principal
+# --- MAIN LOOP ---
 while true; do
-    CHOICE=$(whiptail --title "Arch Linux Installer" --menu "Selecione a tarefa:" 20 65 9 \
-        "1" "Preparar Mirrors (BR) e Teclado" \
-        "2" "Particionar e Montar Discos" \
-        "3" "Pacstrap: Base (Kernel + Redes)" \
-        "4" "Pacstrap: Drivers NVIDIA" \
-        "5" "Pacstrap: GNOME + Steam" \
-        "6" "Configurar Sistema e Bootloader" \
-        "7" "Criar Usuário e Senhas" \
-        "8" "Finalizar e Reiniciar" 3>&1 1>&2 2>&3)
+    CHOICE=$(whiptail --title " ARCH PT-BR MODULAR INSTALLER " --menu "Progress Map:" 19 65 11 \
+        "1" "󰌌  Step 1: Keys & Time" \
+        "2" "󰏖  Step 2: Mirrors (BR)" \
+        "3" "󰋊  Step 3: Partitioning" \
+        "4" "󰒋  Step 4: Format & Mount" \
+        "5" "󰏖  Step 5: Pacstrap Install" \
+        "6" "󰒓  Step 6: System & Locale" \
+        "7" "󰈐  Step 7: Drivers & Services" \
+        "8" "󰜉  Step 8: Bootloader Setup" \
+        "9" "󰀉  Step 9: Set Root Password" \
+        "10" "󰀉  Step 10: Create User Account" \
+        "11" "󰜉  Step 11: Reboot System" 3>&1 1>&2 2>&3)
 
     case $CHOICE in
-        1) do_prep ;;
-        2) do_disk ;;
-        3) do_pacstrap base ;;
-        4) do_pacstrap nvidia ;;
-        5) do_pacstrap gnome ;;
-        6) do_config ;;
-        7) do_user ;;
-        8) 
-            if whiptail --yesno "Deseja desmontar /mnt e reiniciar agora?" 8 45; then
-                rm -f /tmp/inst_vars
-                umount -R /mnt && reboot
-            else
-                continue
-            fi
-            ;;
-        *) 
-            rm -f /tmp/inst_vars
-            exit 
-            ;;
+        1) do_prep_net ;;
+        2) do_prep_mirrors ;;
+        3) do_disk_setup ;;
+        4) do_disk_mount ;;
+        5) do_pacstrap ;;
+        6) do_config_system ;;
+        7) do_hardware ;;
+        8) do_bootloader ;;
+        9) do_root_pass ;;
+        10) do_create_user ;;
+        11) if whiptail --title " Exit " --yesno "Reboot now?" 8 45; then rm -f /tmp/inst_vars; umount -R /mnt && reboot; fi ;;
+        *) exit ;;
     esac
 done
