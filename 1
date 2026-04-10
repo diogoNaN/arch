@@ -64,11 +64,11 @@ do_disk_mount() {
 # --- STAGE 3: INSTALL ---
 do_pacstrap() {
     clear
-    local base_sys="base linux linux-firmware base-devel networkmanager nano git zsh zsh-completions"
+    local base_sys="base linux linux-firmware base-devel networkmanager nano git zsh zsh-autosuggestions"
     local video="nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils"
     local games="steam"
-    local desktop="gnome gdm xorg-xwayland"
-    local tools="gnome-tweaks file-roller gnome-disk-utility gnome-system-monitor bluez bluez-utils"
+    local desktop="gnome gdm xorg-xwayland epiphany gnome-tweaks flatpak"
+    local tools="file-roller gnome-disk-utility gnome-system-monitor bluez bluez-utils pipewire-pulse pavucontrol ttf-jetbrains-mono noto-fonts wget curl fastfetch"
     local pkgs="$base_sys $video $games $desktop $tools"
     echo -e "\e[1;32m[INSTALANDO PACOTES: DEV & GAMER EDITION]\e[0m"
     confirm "pacstrap -K /mnt $pkgs"
@@ -123,7 +123,10 @@ do_create_user() {
     
     echo -n "Enter new username: "
     read -r USER_NAME < /dev/tty
-    confirm "arch-chroot /mnt useradd -m -G wheel -s /bin/bash $USER_NAME"
+    confirm "arch-chroot /mnt useradd -m -G wheel -s /bin/zsh $USER_NAME"
+    confirm "arch-chroot /mnt cp /etc/zsh/zshrc /home/$USER_NAME/.zshrc"
+    confirm "arch-chroot /mnt bash -c \"echo 'source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh' >> /home/$USER_NAME/.zshrc\""
+    confirm "arch-chroot /mnt chown -R $USER_NAME:$USER_NAME /home/$USER_NAME"
     
     echo -e "\nSet password for $USER_NAME:"
     arch-chroot /mnt passwd "$USER_NAME"
