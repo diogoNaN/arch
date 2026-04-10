@@ -4,8 +4,11 @@
 do_prep() {
     loadkeys br-abnt2 && timedatectl set-ntp true
     sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
-    echo "Buscando os melhores mirrors do Brasil..."
-    reflector --country Brazil --latest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+    
+    echo "Buscando os mirrors mais atualizados do Brasil..."
+    # Aumentado para 15 mirrors e ordenado por 'age' para evitar erros de timeout no teste de velocidade
+    reflector --country Brazil --latest 15 --protocol https --sort age --save /etc/pacman.d/mirrorlist
+    
     pacman -Sy
 }
 
@@ -26,6 +29,7 @@ do_disk() {
     mount ${DISK}${PART_SUFFIX}2 /mnt
     mount --mkdir ${DISK}${PART_SUFFIX}1 /mnt/boot
     
+    # Persistência de variáveis para as próximas etapas
     echo "DISK=$DISK" > /tmp/inst_vars
     echo "PART_SUFFIX=$PART_SUFFIX" >> /tmp/inst_vars
 }
@@ -67,12 +71,12 @@ do_user() {
     arch-chroot /mnt passwd "$USER_NAME"
 }
 
-# Loop Principal
+# Loop Principal com Whiptail
 while true; do
-    CHOICE=$(whiptail --title "Arch Linux Installer" --menu "Navegue com as setas e escolha a etapa:" 20 65 9 \
-        "1" "Preparar Mirrors (BR) e Teclado" \
+    CHOICE=$(whiptail --title "Arch Linux Installer (Mirrors BR)" --menu "Escolha uma etapa:" 20 65 9 \
+        "1" "Preparar Mirrors (Brasil) e Teclado" \
         "2" "Particionar e Montar Discos" \
-        "3" "Pacstrap: Base (Sistema Essencial)" \
+        "3" "Pacstrap: Base (Kernel + Redes)" \
         "4" "Pacstrap: Drivers NVIDIA" \
         "5" "Pacstrap: GNOME + Steam" \
         "6" "Configurar Sistema e Bootloader" \
@@ -88,7 +92,7 @@ while true; do
         6) do_config ;;
         7) do_user ;;
         8) 
-            if whiptail --yesno "Desmontar e reiniciar agora?" 8 45; then
+            if whiptail --yesno "Desmontar /mnt e reiniciar agora?" 8 45; then
                 rm -f /tmp/inst_vars
                 umount -R /mnt && reboot
             else
@@ -102,4 +106,5 @@ while true; do
     esac
 done
 
+# Limpeza caso o script seja fechado com CTRL+C
 rm -f /tmp/inst_vars
