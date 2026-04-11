@@ -148,10 +148,26 @@ do_create_user() {
     pause
 }
 
+do_reboot() {
+    clear
+    echo -e "${WARNING} ${CLR_YELLOW}--- FINALIZING ---${CLR_RESET}"
+    echo -e "${INFO} ${CLR_WHITE}Installation is complete.${CLR_RESET}"
+    echo -e "${INFO} ${CLR_CYAN}IMPORTANT: Remove the USB drive when the screen goes black.${CLR_RESET}"
+    
+    if whiptail --title " Reboot System " --yesno "Would you like to reboot now?\n\nRemember to remove the USB drive during boot." 10 50; then
+        echo -e "\n${NEXT} Unmounting file systems..."
+        rm -f /tmp/inst_vars
+        umount -R /mnt
+        echo -e "${SUCCESS} All set. Rebooting in 3 seconds..."
+        sleep 3
+        reboot
+    fi
+}
+
 while true; do
-    CHOICE=$(whiptail --title " ARCH PT-BR MODULAR INSTALLER " --menu "Progress Map:" 19 65 11 \
+    CHOICE=$(whiptail --title " ARCH LINUX MODULAR INSTALLER " --menu "Progress Map:" 20 65 11 \
         "1" "󰌌  Step 1: Keys & Time" \
-        "2" "󰏖  Step 2: Mirrors (BR)" \
+        "2" "󰏖  Step 2: Mirrors" \
         "3" "󰋊  Step 3: Partitioning" \
         "4" "󰒋  Step 4: Format & Mount" \
         "5" "󰏖  Step 5: Pacstrap Install" \
@@ -160,7 +176,7 @@ while true; do
         "8" "󰜉  Step 8: Bootloader Setup" \
         "9" "󰀉  Step 9: Set Root Password" \
         "10" "󰀉  Step 10: Create User Account" \
-        "11" "󰜉  Step 11: Reboot System" 3>&1 1>&2 2>&3)
+        "11" "󰜉  Step 11: Finalize & Reboot" 3>&1 1>&2 2>&3)
 
     case $CHOICE in
         1) do_prep_net ;;
@@ -173,7 +189,7 @@ while true; do
         8) do_bootloader ;;
         9) do_root_pass ;;
         10) do_create_user ;;
-        11) if whiptail --title " Exit " --yesno "Reboot now?" 8 45; then rm -f /tmp/inst_vars; umount -R /mnt && reboot; fi ;;
+        11) do_reboot ;;
         *) exit ;;
     esac
 done
