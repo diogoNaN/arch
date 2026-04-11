@@ -118,8 +118,8 @@ do_bootloader() {
     source /tmp/inst_vars
     ROOT_UUID=$(blkid -s UUID -o value ${DISK}${PART_SUFFIX}2)
     confirm "arch-chroot /mnt bootctl install"
-    confirm "arch-chroot /mnt bash -c \"echo -e 'title Arch Linux\nlinux /vmlinuz-linux\ninitrd /initramfs-linux.img\noptions root=UUID=$ROOT_UUID rw nvidia-drm.modeset=1' > /boot/loader/entries/arch.conf\""
-    confirm "arch-chroot /mnt bash -c \"echo -e 'default arch.conf\ntimeout 1\nconsole-mode max' > /boot/loader/loader.conf\""
+    confirm "arch-chroot /mnt bash -c \"echo -e 'title Arch Linux\nlinux /vmlinuz-linux\ninitrd /initramfs-linux.img\noptions root=UUID=$ROOT_UUID rw nvidia-drm.modeset=1 quiet loglevel=3 rd.systemd.show_status=auto rd.udev.log_level=3' > /boot/loader/entries/arch.conf\""
+    confirm "arch-chroot /mnt bash -c \"echo -e 'default arch.conf\ntimeout 0\nconsole-mode max' > /boot/loader/loader.conf\""
     pause
 }
 
